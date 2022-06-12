@@ -27,9 +27,6 @@ async fn main() -> Result<()> {
         .expect("something went wrong reading the file");
     let mfa_serial = contents.trim();
 
-    println!("{}", mfa_token);
-    println!("{}", mfa_serial);
-
     // aws sts get-session-token --serial-number arn-of-the-mfa-device --token-code code-from-token
     let output = Command::new("aws")
         .arg("sts")
@@ -38,6 +35,8 @@ async fn main() -> Result<()> {
         .arg(mfa_serial)
         .arg("--token-code")
         .arg(mfa_token)
+        .arg("--profile")
+        .arg("default")
         .output()
         .await
         .expect("failed to run");
@@ -45,9 +44,45 @@ async fn main() -> Result<()> {
     let v: Value = serde_json::from_str(&String::from_utf8_lossy(&output.stdout))
         .expect("json parse error");
 
-    println!("{}", v["Credentials"]["AccessKeyId"]);
-    println!("{}", v["Credentials"]["SecretAccessKey"]);
-    println!("{}", v["Credentials"]["SessionToken"]);
+    println!("aws_access_key_id {}", v["Credentials"]["AccessKeyId"]);
+    println!("aws_secret_access_key {}", v["Credentials"]["SecretAccessKey"]);
+    println!("aws_session_token {}", v["Credentials"]["SessionToken"]);
+
+    // aws configure set aws_access_key_id access_key_id --profile mfa
+    Command::new("aws")
+        .arg("configure")
+        .arg("set")
+        .arg("aws_access_key_id")
+        .arg(v["Credentials"]["AccessKeyId"].to_string())
+        .arg("--profile")
+        .arg("mfa")
+        .output()
+        .await
+        .expect("failed to run");
+
+    // aws configure set aws_secret_access_key secret_access_key --profile mfa
+    Command::new("aws")
+        .arg("configure")
+        .arg("set")
+        .arg("aws_secret_access_key")
+        .arg(v["Credentials"]["SecretAccessKey"].to_string())
+        .arg("--profile")
+        .arg("mfa")
+        .output()
+        .await
+        .expect("failed to run");
+
+    // aws configure set aws_session_token session_token --profile mfa
+    Command::new("aws")
+        .arg("configure")
+        .arg("set")
+        .arg("aws_session_token")
+        .arg(v["Credentials"]["SessionToken"].to_string())
+        .arg("--profile")
+        .arg("mfa")
+        .output()
+        .await
+        .expect("failed to run");
 
     Ok(())
 }
